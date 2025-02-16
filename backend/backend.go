@@ -7,5 +7,5 @@ import (
 )
 
 type Backend interface {
-	List(ctx context.Context, request models.ListGetRequest) (response models.ListGetResponse, err error)
+	List(ctx context.Context, request models.ListRecordsRequest) (response models.ListRecordsResponse, err error)
 }

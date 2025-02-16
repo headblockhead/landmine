@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/headblockhead/landmine/backend/airtable"
-	listget "github.com/headblockhead/landmine/handlers/get"
+	"github.com/headblockhead/landmine/handlers/listrecords"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -20,7 +20,7 @@ type Landmine struct {
 
 func NewLandmine(log *slog.Logger, client *clientv3.Client) *Landmine {
 	mux := http.NewServeMux()
-	lget := listget.New(log, airtable.New(http.DefaultClient, os.Getenv("AIRTABLE_API_KEY")))
+	lget := listrecords.New(log, airtable.New(log, http.DefaultClient, os.Getenv("AIRTABLE_API_KEY")))
 	mux.Handle("GET /{baseID}/{tableIDOrName}", lget)
 	return &Landmine{
 		Mux:        mux,
@@ -33,7 +33,7 @@ func (l *Landmine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	log := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	client, err := clientv3.New(clientv3.Config{
 		Endpoints:   []string{"localhost:2379"}, // TODO: use Kong for this
 		DialTimeout: 5 * time.Second,
