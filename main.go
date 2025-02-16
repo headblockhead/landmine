@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/headblockhead/landmine/backend/airtable"
+	"github.com/headblockhead/landmine/handlers/createrecords"
 	"github.com/headblockhead/landmine/handlers/listrecords"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
@@ -20,8 +21,11 @@ type Landmine struct {
 
 func NewLandmine(log *slog.Logger, client *clientv3.Client) *Landmine {
 	mux := http.NewServeMux()
-	lget := listrecords.New(log, airtable.New(log, http.DefaultClient, os.Getenv("AIRTABLE_API_KEY")))
-	mux.Handle("GET /{baseID}/{tableIDOrName}", lget)
+	airtableClient := airtable.New(log, http.DefaultClient, os.Getenv("AIRTABLE_API_KEY"))
+	listrec := listrecords.New(log, airtableClient)
+	mux.Handle("GET /{baseID}/{tableIDOrName}", listrec)
+	createrec := createrecords.New(log, airtableClient)
+	mux.Handle("POST /{baseID}/{tableIDOrName}", createrec)
 	return &Landmine{
 		Mux:        mux,
 		EtcdClient: client,

@@ -1,9 +1,11 @@
 package airtable
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -100,5 +102,43 @@ func (c *Client) List(ctx context.Context, request models.ListRecordsRequest) (r
 }
 
 func (c *Client) Create(ctx context.Context, request models.CreateRecordsRequest) (response models.CreateRecordsResponse, err error) {
-	return models.CreateRecordsResponse{}, nil
+	u, err := url.Parse(fmt.Sprintf("https://api.airtable.com/v0/%s/%s", url.PathEscape(request.BaseID), url.PathEscape(request.TableIDOrName)))
+	if err != nil {
+		return models.CreateRecordsResponse{}, err
+	}
+
+	b, err := json.Marshal(request)
+	if err != nil {
+		return models.CreateRecordsResponse{}, err
+	}
+
+	c.Log.Debug("sending request", slog.String("url", u.String()), slog.String("body", string(b)))
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewBuffer(b))
+	if err != nil {
+		return models.CreateRecordsResponse{}, err
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.PAT))
+	req.Header.Set("Content-Type", "application/json")
+	rsp, err := c.Client.Do(req)
+	if err != nil {
+		return models.CreateRecordsResponse{}, err
+	}
+	defer rsp.Body.Close()
+
+	buf := new(bytes.Buffer)
+	_, err = io.Copy(buf, rsp.Body)
+	if err != nil {
+		return models.CreateRecordsResponse{}, err
+	}
+
+	c.Log.Debug("HTTP response", slog.Int("status", rsp.StatusCode), slog.String("body", buf.String()))
+
+	err = json.NewDecoder(bytes.NewBuffer(buf.Bytes())).Decode(&response)
+	if err != nil {
+		return models.CreateRecordsResponse{}, err
+	}
+
+	return response, nil
 }

@@ -171,16 +171,16 @@ func parseBool(s string) (v, ok bool) {
 
 type CreateRecordsRequest struct {
 	// Path parameters
-	BaseID        string
-	TableIDOrName string
+	BaseID        string `json:"-"`
+	TableIDOrName string `json:"-"`
 
 	// Body parameters
 
 	// If one record is created:
-	Fields map[string]any `json:"fields"`
+	Fields map[string]any `json:"fields,omitempty"`
 
 	// If multiple records are created:
-	Records []map[string]any `json:"records"`
+	Records []map[string]any `json:"records,omitempty"`
 
 	ReturnFieldsByFieldId bool `json:"returnFieldsByFieldId"`
 	TypeCast              bool `json:"typecast"`
@@ -188,12 +188,12 @@ type CreateRecordsRequest struct {
 
 type CreateRecordsResponse struct {
 	// If one record is created:
-	ID          string         `json:"id"`
-	CreatedTime time.Time      `json:"createdTime"`
-	Fields      map[string]any `json:"fields"`
+	ID          string         `json:"id,omitempty"`
+	CreatedTime time.Time      `json:"createdTime,omitzero"`
+	Fields      map[string]any `json:"fields,omitempty"`
 
 	// If multiple records are created:
-	Records []Record `json:"records"`
+	Records []Record `json:"records,omitempty"`
 }
 
 func NewCreateRecordsRequest(r *http.Request) (req CreateRecordsRequest, validationFailures map[string]string) {
