@@ -37,6 +37,53 @@ func QueryFromSortMap(sort []models.Sort) (q url.Values) {
 	return q
 }
 
+func doRequest[TResponse any](ctx context.Context, log *slog.Logger, client *http.Client, method string, url string, pat string, body any) (response TResponse, err error) {
+	log.Debug("sending request", slog.String("url", url))
+
+	var br io.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return response, err
+		}
+		br = bytes.NewBuffer(b)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, url, br)
+	if err != nil {
+		return response, err
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", pat))
+	if br != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	rsp, err := client.Do(req)
+	if err != nil {
+		return response, err
+	}
+
+	err = parseResponse(log, rsp, &response)
+	if err != nil {
+		return response, err
+	}
+
+	return response, nil
+}
+
+func parseResponse(log *slog.Logger, response *http.Response, v any) error {
+	defer response.Body.Close()
+	buf := new(bytes.Buffer)
+	_, err := io.Copy(buf, response.Body)
+	if err != nil {
+		return err
+	}
+
+	log.Debug("HTTP response", slog.Int("status", response.StatusCode), slog.String("body", buf.String()))
+
+	return json.NewDecoder(bytes.NewBuffer(buf.Bytes())).Decode(v)
+}
+
 func (c *Client) List(ctx context.Context, request models.ListRecordsRequest) (response models.ListRecordsResponse, err error) {
 	u, err := url.Parse(fmt.Sprintf("https://api.airtable.com/v0/%s/%s", url.PathEscape(request.BaseID), url.PathEscape(request.TableIDOrName)))
 	if err != nil {
@@ -93,7 +140,15 @@ func (c *Client) List(ctx context.Context, request models.ListRecordsRequest) (r
 	}
 	defer rsp.Body.Close()
 
-	err = json.NewDecoder(rsp.Body).Decode(&response)
+	buf := new(bytes.Buffer)
+	_, err = io.Copy(buf, rsp.Body)
+	if err != nil {
+		return models.ListRecordsResponse{}, err
+	}
+
+	c.Log.Debug("HTTP response", slog.Int("status", rsp.StatusCode), slog.String("body", buf.String()))
+
+	err = json.NewDecoder(bytes.NewBuffer(buf.Bytes())).Decode(&response)
 	if err != nil {
 		return models.ListRecordsResponse{}, err
 	}
@@ -107,38 +162,15 @@ func (c *Client) Create(ctx context.Context, request models.CreateRecordsRequest
 		return models.CreateRecordsResponse{}, err
 	}
 
-	b, err := json.Marshal(request)
+	return doRequest[models.CreateRecordsResponse](ctx, c.Log, c.Client, http.MethodPost, u.String(), c.PAT, request)
+}
+
+func (c *Client) DeleteMultiple(ctx context.Context, request models.DeleteRecordsRequest) (response models.DeleteRecordsResponse, err error) {
+
+	u, err := url.Parse(fmt.Sprintf("https://api.airtable.com/v0/%s/%s", url.PathEscape(request.BaseID), url.PathEscape(request.TableIDOrName)))
 	if err != nil {
-		return models.CreateRecordsResponse{}, err
+		return models.DeleteRecordsResponse{}, err
 	}
 
-	c.Log.Debug("sending request", slog.String("url", u.String()), slog.String("body", string(b)))
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewBuffer(b))
-	if err != nil {
-		return models.CreateRecordsResponse{}, err
-	}
-
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.PAT))
-	req.Header.Set("Content-Type", "application/json")
-	rsp, err := c.Client.Do(req)
-	if err != nil {
-		return models.CreateRecordsResponse{}, err
-	}
-	defer rsp.Body.Close()
-
-	buf := new(bytes.Buffer)
-	_, err = io.Copy(buf, rsp.Body)
-	if err != nil {
-		return models.CreateRecordsResponse{}, err
-	}
-
-	c.Log.Debug("HTTP response", slog.Int("status", rsp.StatusCode), slog.String("body", buf.String()))
-
-	err = json.NewDecoder(bytes.NewBuffer(buf.Bytes())).Decode(&response)
-	if err != nil {
-		return models.CreateRecordsResponse{}, err
-	}
-
-	return response, nil
+	return doRequest[models.DeleteRecordsResponse](ctx, c.Log, c.Client, http.MethodDelete, u.String(), c.PAT, nil)
 }

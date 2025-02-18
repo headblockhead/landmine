@@ -214,3 +214,39 @@ func NewCreateRecordsRequest(r *http.Request) (req CreateRecordsRequest, validat
 
 	return
 }
+
+type DeleteRecordsRequest struct {
+	// Path parameters
+	BaseID        string `json:"-"`
+	TableIDOrName string `json:"-"`
+
+	// Query parameters
+	RecordIDs []string `json:"records"`
+}
+
+type DeletedRecords struct {
+	ID      string `json:"id"`
+	Deleted bool   `json:"deleted"`
+}
+
+type DeleteRecordsResponse struct {
+	RecordIDs []DeletedRecords `json:"records"`
+}
+
+func NewDeleteRecordsRequest(r *http.Request) (req DeleteRecordsRequest, validationFailures map[string]string) {
+	validationFailures = make(map[string]string)
+
+	req.BaseID = r.PathValue("baseID")
+	if req.BaseID == "" {
+		validationFailures["baseID"] = "missing or invalid"
+	}
+	req.TableIDOrName = r.PathValue("tableIDOrName")
+	if req.TableIDOrName == "" {
+		validationFailures["tableIDOrName"] = "missing or invalid"
+	}
+
+	q := r.URL.Query()
+	req.RecordIDs = q["records"]
+
+	return
+}
